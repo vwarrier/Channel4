@@ -1,0 +1,245 @@
+---
+title: "Channel_4_validation"
+author: "Varun Warrier"
+date: "11 May 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+
+This is a file to validate 7 out of the 10 findings:
+
+(1) Females on average will score higher on empathy 
+(2) That males on average will score higher on systemizing
+(3) That there will be a trade-off between E and S. 
+(4) That there are 5 distinct 'brain types' based on the difference (or D-score) between E and S. These brain types are Type B (balanced, where E=S), Type E (where E>S), Type S (where S>E), Extreme Type E (E>>S) and Extreme Type S (S>>E). 
+(5) That more females will have a brain of Type E, and 
+(6) that more males will have a brain of Type S.
+(7) That more people with autism will have a brain of Extreme Type S.
+
+\newpage
+
+#Step 1: read dataset and create variables
+```{r}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(plyr)
+library(reshape2)
+
+data1 = fread("C:/Users/Varun/Desktop/Manuscripts 2018/Channel_4/replication_mu.txt")
+data1$sex = ifelse(data1$sex == "1", "Male", "Female")
+data1$autism  = ifelse(data1$autism == "1", "Autism", "Control")
+data1$category = ifelse(data1$autism == "Autism" & data1$sex == "Male", "Autism_male", NA)
+data1$category = ifelse(data1$autism == "Autism" & data1$sex == "Female", "Autism_female", data1$category)
+data1$category = ifelse(data1$autism == "Control" & data1$sex == "Female", "Control_female", data1$category)
+data1$category = ifelse(data1$autism == "Control" & data1$sex == "Male", "Control_male", data1$category)
+
+data1= data1[!is.na(data1$age),]
+
+data1 = subset(data1, age > 17 & age < 89)
+
+a =  nrow(subset(data1, category == "Control_male"))
+
+cat("the number of control males is", a)
+
+a =  nrow(subset(data1, category == "Control_female"))
+
+cat("the number of control females is", a)
+
+a =  nrow(subset(data1, category == "Autism_male"))
+
+cat("the number of Autism males is", a)
+
+a =  nrow(subset(data1, category == "Autism_female"))
+
+cat("the number of Autism females is", a)
+```
+
+\newpage
+
+#Generate D scores
+```{r}
+controls = subset(data1, autism == "Control")
+cases = subset(data1, autism == "Autism")
+
+meanSQ = mean(controls$SQ_total)
+meanEQ = mean(controls$EQ_total)
+
+data1$SQ_full_standardized_w = (data1$SQ_total - meanSQ)/50
+data1$EQ_full_standardized_w = (data1$EQ_total - meanEQ)/80
+data1$wheelwrightD = data1$SQ_full_standardized_w - data1$EQ_full_standardized_w
+
+data1$dpercentile = ntile(data1$wheelwrightD, 100)
+
+data1$braintype = ifelse(data1$dpercentile < 2.5, "1",
+                 ifelse(between(data1$dpercentile, 2.499, 35), "2",
+                    ifelse(between(data1$dpercentile, 34.99, 65), "3", 
+                           ifelse(between(data1$dpercentile, 64.99 , 97.5), "4", "5"))))
+
+
+
+```
+
+\newpage
+
+#Run analysis and generate figures: predictions 1 and 2
+```{r}
+# Sex differences
+t.test(controls$EQ_total ~ controls$sex)
+t.test(controls$SQ_total ~ controls$sex)
+
+
+t.test(cases$EQ_total ~ cases$sex)
+t.test(cases$SQ_total ~ cases$sex)
+
+cor.test(scale(controls$EQ_total), scale(controls$SQ_total))
+
+data2 = data1[,c ("category", "EQ_total", "SQ_total" )]
+data2 = na.omit(data2)
+data2_melt =  melt(data2, id.vars=c("category"))
+ddply(data2_melt, c("category", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+
+```
+
+\newpage
+
+## Brain type analysis
+### Females control percentage
+
+```{R}
+
+#Sex distribution
+
+fem_controls = subset(data1, category == "Control_female")
+
+cat("total number of females is", nrow(fem_controls))
+
+extremeE = subset(fem_controls, braintype == "1")
+E = subset(fem_controls, braintype == "2")
+B = subset(fem_controls, braintype == "3")
+S = subset(fem_controls, braintype == "4")
+extremeS = subset(fem_controls, braintype == "5")
+
+cat("percentage of females with extreme E is", (nrow(extremeE)/nrow(fem_controls))*100)
+
+cat("percentage of females with E is", (nrow(E)/nrow(fem_controls))*100 )
+
+cat("percentage of females with B is", (nrow(B)/nrow(fem_controls))*100)
+
+cat("percentage of females with S is", (nrow(S)/nrow(fem_controls))*100)
+
+cat("percentage of females with Extreme S is", (nrow(extremeS)/nrow(fem_controls))*100)
+
+```
+
+
+\newpage
+
+## Brain type analysis
+### Males percentage
+
+```{R}
+
+#Sex distribution
+
+
+male_controls = subset(data1, category == "Control_male")
+
+cat("total number of males is", nrow(male_controls))
+
+extremeE = subset(male_controls, braintype == "1")
+E = subset(male_controls, braintype == "2")
+B = subset(male_controls, braintype == "3")
+S = subset(male_controls, braintype == "4")
+extremeS = subset(male_controls, braintype == "5")
+
+cat("percentage of males with extreme E is", (nrow(extremeE)/nrow(male_controls))*100)
+
+cat("percentage of males with E is", (nrow(E)/nrow(male_controls))*100 )
+
+cat("percentage of males with B is", (nrow(B)/nrow(male_controls))*100)
+
+cat("percentage of males with S is", (nrow(S)/nrow(male_controls))*100)
+
+cat("percentage of males with Extreme S is", (nrow(extremeS)/nrow(male_controls))*100)
+
+```
+
+
+\newpage
+
+## Brain type analysis
+### Females cases percentage
+
+```{R}
+
+#Sex distribution
+
+fem_cases = subset(data1, category == "Autism_female")
+
+cat("total number of females is", nrow(fem_cases))
+
+extremeE = subset(fem_cases, braintype == "1")
+E = subset(fem_cases, braintype == "2")
+B = subset(fem_cases, braintype == "3")
+S = subset(fem_cases, braintype == "4")
+extremeS = subset(fem_cases, braintype == "5")
+
+cat("percentage of females with extreme E is", (nrow(extremeE)/nrow(fem_cases))*100)
+
+cat("percentage of females with E is", (nrow(E)/nrow(fem_cases))*100 )
+
+cat("percentage of females with B is", (nrow(B)/nrow(fem_cases))*100)
+
+cat("percentage of females with S is", (nrow(S)/nrow(fem_cases))*100)
+
+cat("percentage of females with Extreme S is", (nrow(extremeS)/nrow(fem_cases))*100)
+
+```
+
+\newpage
+
+## Brain type analysis
+### Males cases percentage
+
+```{R}
+
+#Sex distribution
+
+male_cases = subset(data1, category == "Autism_male")
+
+cat("total number of males is", nrow(male_cases))
+
+extremeE = subset(male_cases, braintype == "1")
+E = subset(male_cases, braintype == "2")
+B = subset(male_cases, braintype == "3")
+S = subset(male_cases, braintype == "4")
+extremeS = subset(male_cases, braintype == "5")
+
+cat("percentage of males with extreme E is", (nrow(extremeE)/nrow(male_cases))*100)
+
+cat("percentage of males with E is", (nrow(E)/nrow(male_cases))*100 )
+
+cat("percentage of males with B is", (nrow(B)/nrow(male_cases))*100)
+
+cat("percentage of males with S is", (nrow(S)/nrow(male_cases))*100)
+
+cat("percentage of males with Extreme S is", (nrow(extremeS)/nrow(male_cases))*100)
+
+```
+
+
+
+

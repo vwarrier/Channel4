@@ -1,4 +1,4 @@
-# Channel4
+# Channel 4
 These are scripts and knitted documents used in the paper Greenberg,Warrier et al., 2018, PNAS
 
 

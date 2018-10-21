@@ -1,0 +1,1105 @@
+---
+title: "Channel_4_dataset"
+author: "V_warrier"
+date: "02/04/2018"
+output:
+  html_document: default
+  latex_engine: xelatex
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(plyr)
+library(reshape2)
+data = read.csv("data- originalchannel4 bigdata.csv", header = T, fill = T) #758916 obs
+cat("the total number of IDs in this file is", nrow(data))
+```
+
+\newpage
+
+# Section 1: Data cleaning and generating variables
+
+\newpage
+
+## data cleanup and recoding variables
+
+```{r}
+#remove_repeats
+data2 = subset(data, repeat. == 0) #695166
+
+cat("the number of non-repeated participants is", nrow(data2))
+
+#keep males of females
+data2 = subset(data2, sex == 1 | sex == 2)#672279
+
+cat("\n")
+
+cat("Of this, the number of participants who are either male or female is",  nrow(data2))
+
+##keep age bound
+
+data2 = subset(data2, age > 15 & age < 90)
+
+cat("\n")
+
+cat("Of this, the number participants after all QC is ",  nrow(data2))
+
+```
+
+\newpage
+
+## Recoding variables
+```{r}
+#recode AQ
+data2[,c(51,57,58,60)] <- lapply(data2[,c(51,57,58,60)], function(x) 
+  recode(x,"1" = 1, "2" = 1, "3" = 0, "4" =0 ))
+
+data2[,c(52,53,54,55,56,59)] <- lapply(data2[,c(52,53,54,55,56,59)], function(x) 
+   recode(x,"1" = 0, "2" = 0, "3" = 1, "4" =1))
+
+data2$AQ_full = data2$AQ_1 + data2$AQ_2 + data2$AQ_3 + data2$AQ_4 + data2$AQ_5 + data2$AQ_6 + data2$AQ_7 + data2$AQ_8 + data2$AQ_9 + data2$AQ_10
+
+data2$AQ_Z = scale(data2$AQ_full, center = TRUE, scale = TRUE)
+
+
+#Recode EQ
+data2[,c(31, 32, 34, 36, 39)] <- lapply(data2[,c(31, 32, 34, 36, 39)], function(x) 
+  recode(x,"1" = 2, "2" = 1, "3" = 0, "4" =0 ))
+
+data2[,c(33, 35, 37, 38, 40 )] <- lapply(data2[,c(33, 35, 37, 38, 40)], function(x) 
+  recode(x,"1" = 0, "2" = 0, "3" = 1, "4" =2))
+
+data2$EQ_full = data2$EQ_1 + data2$EQ_2 + data2$EQ_3 + data2$EQ_4 + data2$EQ_5 + data2$EQ_6 + data2$EQ_7 + data2$EQ_8 + data2$EQ_9 + data2$EQ_10
+
+data2$EQ_Z = scale(data2$EQ_full, center = TRUE, scale = TRUE)
+
+
+#Recode SQ
+data2[,c(41,43, 44, 46, 47, 49, 50)] <- lapply(data2[,c(41,43, 44, 46, 47, 49, 50)], function(x) 
+  recode(x,"1" = 2, "2" = 1, "3" = 0, "4" =0 ))
+
+data2[,c(42, 45, 48 )] <- lapply(data2[,c(42, 45, 48)], function(x) 
+  recode(x,"1" = 0, "2" = 0, "3" = 1, "4" =2))
+
+data2$SQ_full = data2$SQR_1 + data2$SQR_2 + data2$SQR_3 + data2$SQR_4 + data2$SQR_5 + data2$SQR_6 + data2$SQR_7 + data2$SQR_8 + data2$SQR_9 + data2$SQR_10
+
+data2$SQ_Z = scale(data2$SQ_full, center = TRUE, scale = TRUE)
+
+
+#Recode SPQ
+
+data2[,c(21:30)] <- lapply(data2[,c(21:30)], function(x) 
+  recode(x,"1" = 3, "2" = 2, "3" = 1, "4" =0 ))
+
+data2$SPQ_full = data2$SPQ_1 + data2$SPQ_2 + data2$SPQ_3 + data2$SPQ_4 + data2$SPQ_5 + data2$SPQ_6 + data2$SPQ_7 + data2$SPQ_8 + data2$SPQ_9 + data2$SPQ_10
+
+
+data2$SPQ_Z = scale(data2$SPQ_full, center = TRUE, scale = TRUE)
+
+data2 = data2[!is.na(data2$AQ_full),]
+
+```
+
+
+\newpage
+
+## Defining cases
+
+```{R}
+#Define cases
+
+#define cases based on all different options
+data2$autism = ifelse(data2$diagnosis_0 == "2" | data2$diagnosis_1 == "2"| data2$diagnosis_3 == "2" | data2$diagnosis_4 == "2" | data2$diagnosis_5 == "2" | data2$diagnosis_6 == "2" | data2$diagnosis_7 == "2" | data2$diagnosis_8 == "2" | data2$autism_diagnosis_0 > 0 | data2$autism_diagnosis_1 > 0 | data2$autism_diagnosis_2 > 0, 1, 0)
+
+data2$autism[is.na(data2$autism)] <- 0
+
+
+#define cases based only on the autism criteria
+data2$autism2 = ifelse(data2$autism_diagnosis_0 > 0 | data2$autism_diagnosis_1 > 0 | data2$autism_diagnosis_2 > 0, 1, 0)
+
+data2$autism2[is.na(data2$autism2)] <- 0
+
+#count the number of cases
+
+
+a =  nrow(subset(data2, autism == 1))
+
+cat("the number of autism cases is (broad criteria)", a)
+
+cat("\n")
+
+b = nrow(subset(data2, autism2 == 1))
+
+cat("the number of autism cases is (narrow criteria)", b)
+
+
+#define schizophrenia
+data2$schizophrenia = ifelse(data2$diagnosis_0 == "7" | data2$diagnosis_1 == "7"| data2$diagnosis_3 == "7" | data2$diagnosis_4 == "7" | data2$diagnosis_5 == "7" | data2$diagnosis_6 == "7" | data2$diagnosis_7 == "7" | data2$diagnosis_8 == "7" | data2$autism_diagnosis_0 == "0" | data2$autism_diagnosis_1 == "0" | data2$autism_diagnosis_2 == "0", 1, 0)
+
+data2$schizophrenia[is.na(data2$schizophrenia)] <- 0
+
+#define ocd
+data2$ocd = ifelse(data2$diagnosis_0 == "6" | data2$diagnosis_1 == "6"| data2$diagnosis_3 == "6" | data2$diagnosis_4 == "6" | data2$diagnosis_5 == "6" | data2$diagnosis_6 == "6" | data2$diagnosis_7 == "6" | data2$diagnosis_8 == "6" | data2$autism_diagnosis_0 == "0" | data2$autism_diagnosis_1 == "0" | data2$autism_diagnosis_2 == "0", 1, 0)
+
+data2$ocd[is.na(data2$ocd)] <- 0
+
+
+#define ld
+data2$ld = ifelse(data2$diagnosis_0 == "5" | data2$diagnosis_1 == "5"| data2$diagnosis_3 == "5" | data2$diagnosis_4 == "5" | data2$diagnosis_5 == "5" | data2$diagnosis_6 == "5" | data2$diagnosis_7 == "5" | data2$diagnosis_8 == "5" | data2$autism_diagnosis_0 == "0" | data2$autism_diagnosis_1 == "0" | data2$autism_diagnosis_2 == "0", 1, 0)
+
+data2$ld[is.na(data2$ld)] <- 0
+
+#define depression
+data2$depression = ifelse(data2$diagnosis_0 == "4" | data2$diagnosis_1 == "4"| data2$diagnosis_3 == "4" | data2$diagnosis_4 == "4" | data2$diagnosis_5 == "4" | data2$diagnosis_6 == "4" | data2$diagnosis_7 == "4" | data2$diagnosis_8 == "4" | data2$autism_diagnosis_0 == "0" | data2$autism_diagnosis_1 == "0" | data2$autism_diagnosis_2 == "0", 1, 0)
+
+data2$depression[is.na(data2$depression)] <- 0
+
+
+#define bipolar
+data2$bipolar = ifelse(data2$diagnosis_0 == "3" | data2$diagnosis_1 == "3"| data2$diagnosis_3 == "3" | data2$diagnosis_4 == "3" | data2$diagnosis_5 == "3" | data2$diagnosis_6 == "3" | data2$diagnosis_7 == "3" | data2$diagnosis_8 == "3" | data2$autism_diagnosis_0 == "0" | data2$autism_diagnosis_1 == "0" | data2$autism_diagnosis_2 == "0", 1, 0)
+
+data2$bipolar[is.na(data2$bipolar)] <- 0
+
+#define adhd
+data2$adhd = ifelse(data2$diagnosis_0 == "1" | data2$diagnosis_1 == "1"| data2$diagnosis_3 == "1" | data2$diagnosis_4 == "1" | data2$diagnosis_5 == "1" | data2$diagnosis_6 == "1" | data2$diagnosis_7 == "1" | data2$diagnosis_8 == "6" | data2$autism_diagnosis_0 == "0" | data2$autism_diagnosis_1 == "0" | data2$autism_diagnosis_2 == "0", 1, 0)
+
+data2$ocd[is.na(data2$ocd)] <- 0
+
+
+```
+
+\newpage
+
+## Defining other variables
+
+```{r}
+#Define other variables
+
+data2$STEM = ifelse(data2$occupation  == "3" | data2$occupation == "5" | data2$occupation == "21" , 1, 0)
+data2$STEM[is.na(data2$STEM)] <- 0
+data2$STEM = ifelse(data2$occupation == "26", 0, data2$STEM)
+
+STEM = subset(data2, STEM == "1")
+
+cat("No of participants in STEM occupation is", nrow(STEM))
+
+cat("\n")
+
+
+###update country region
+data2$countryregion = ifelse(data2$countryregion == "14", 0, data2$countryregion)
+
+###update education
+
+data2$education = ifelse(data2$education == "5", 0, data2$education)
+
+###update handedness
+
+data2$handedness = ifelse(data2$handedness == "4", 0, data2$handedness)
+
+
+```
+
+
+\newpage
+
+## Generating D-scores and brain types
+
+```{R}
+#This is Wheelwright's method: https://www.ncbi.nlm.nih.gov/pubmed/16473340
+
+controls = subset(data2, autism == "0")
+cases = subset(data2, autism == "1")
+
+meanSQ = mean(controls$SQ_full)
+meanEQ = mean(controls$EQ_full)
+
+data2$SQ_full_standardized_w = (data2$SQ_full - meanSQ)/20
+data2$EQ_full_standardized_w = (data2$EQ_full - meanEQ)/20
+data2$wheelwrightD = data2$SQ_full_standardized_w - data2$EQ_full_standardized_w
+
+data2$dpercentile = ntile(data2$wheelwrightD, 100)
+
+data2$braintype = ifelse(data2$dpercentile < 2.5, "1",
+                 ifelse(between(data2$dpercentile, 2.499, 35), "2",
+                    ifelse(between(data2$dpercentile, 34.99, 65), "3", 
+                           ifelse(between(data2$dpercentile, 64.99 , 97.5), "4", "5"))))
+
+controls = subset(data2, autism == "0") #redefining cases and controls again so downstream analysis can include braintype
+cases = subset(data2, autism == "1")
+
+```
+
+
+\newpage
+
+# seperating by sex
+
+```{R}
+
+males_controls = subset(controls, sex == "1")
+females_controls = subset(controls, sex == "2")
+
+dim(males_controls)
+
+dim(females_controls)
+
+
+males_cases = subset(cases, sex == "1")
+females_cases = subset(cases, sex == "2")
+
+dim(males_cases)
+dim(females_cases)
+```
+
+\newpage
+
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+
+
+
+
+
+# Section 2: Sex, age and geographical location differences
+
+\newpage
+
+## Sex differences in controls
+
+```{R}
+#Basic statistics
+
+# Sex differences
+t.test(controls$AQ_full ~ controls$sex)
+ggplot(controls, aes(x=AQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+
+t.test(controls$EQ_full ~ controls$sex)
+ggplot(controls, aes(x=EQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+t.test(controls$SQ_full ~ controls$sex)
+ggplot(controls, aes(x=SQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+
+t.test(controls$SPQ_full ~ controls$sex)
+ggplot(controls, aes(x=SPQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+controls2 = controls[,c ("sex", "AQ_full", "EQ_full", "SQ_full", "SPQ_full" )]
+controls2 = na.omit(controls2)
+controls2_melt =  melt(controls2, id.vars=c("sex"))
+ddply(controls2_melt, c("sex", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+
+```
+
+\newpage
+
+## Sex differences in cases
+
+```{R}
+
+t.test(cases$AQ_full ~ cases$sex)
+ggplot(cases, aes(x=AQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+t.test(cases$EQ_full ~ cases$sex)
+ggplot(cases, aes(x=EQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+t.test(cases$SQ_full ~ cases$sex)
+ggplot(cases, aes(x=SQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+
+t.test(cases$SPQ_full ~ cases$sex)
+ggplot(cases, aes(x=SPQ_full, colour=as.character(sex))) +   geom_density() + theme_minimal()
+
+
+cases2 = cases[,c ("sex", "AQ_full", "EQ_full", "SQ_full", "SPQ_full" )]
+cases2 = na.omit(cases2)
+cases2_melt =  melt(cases2, id.vars=c("sex"))
+ddply(cases2_melt, c("sex", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+```
+
+\newpage
+
+## Quantifying differences in effect sizes
+
+```{R}
+
+summary(lm(AQ_full ~ as.character(sex) + as.character(autism) + as.character(sex):as.character(autism), data = data2))
+summary(lm(EQ_full ~ as.character(sex) + as.character(autism) + as.character(sex):as.character(autism), data = data2))
+summary(lm(SQ_full ~ as.character(sex) + as.character(autism) + as.character(sex):as.character(autism), data = data2))
+summary(lm(SPQ_full ~ as.character(sex) + as.character(autism) + as.character(sex):as.character(autism), data = data2))
+
+
+
+```
+
+
+\newpage
+
+## Correlations between AQ, EQ, SQ, and SPQ in the controls data
+```{R}
+
+cor.test(controls$AQ_full, controls$EQ_full)
+
+cor.test(controls$AQ_full, controls$SQ_full)
+
+cor.test(controls$AQ_full, controls$SPQ_full)
+
+cor.test(controls$EQ_full, controls$SQ_full)
+
+cor.test(controls$EQ_full, controls$SPQ_full)
+
+cor.test(controls$SQ_full, controls$SPQ_full)
+
+```
+
+
+
+\newpage
+
+## Age differences in controls
+
+```{R}
+#Age differences
+cor.test(controls$AQ_full, controls$age)
+ggplot(controls, aes(AQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(controls$EQ_full, controls$age)
+ggplot(controls, aes(EQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(controls$SQ_full, controls$age)
+ggplot(controls, aes(SQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(controls$SPQ_full, controls$age)
+ggplot(controls, aes(SPQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+```
+
+
+
+\newpage
+
+## Age differences in cases
+
+```{R}
+#Age differences
+cor.test(cases$AQ_full, cases$age)
+ggplot(cases, aes(AQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(cases$EQ_full, cases$age)
+ggplot(cases, aes(EQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(cases$SQ_full, cases$age)
+ggplot(cases, aes(SQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(cases$SPQ_full, cases$age)
+ggplot(cases, aes(SPQ_full, age)) + geom_smooth(method = "lm") + theme_minimal()
+
+```
+
+
+\newpage
+
+## Correlation with education, controls
+
+```{R}
+#Correlation with education
+
+cor.test(controls$AQ_full, controls$education)
+ggplot(controls, aes(education, AQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(controls$EQ_full, controls$education)
+ggplot(controls, aes(education, EQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(controls$SQ_full, controls$education)
+ggplot(controls, aes(education, SQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(controls$SPQ_full, controls$education)
+ggplot(controls, aes(education, SPQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+```
+
+
+
+\newpage
+
+## Correlation with education, cases
+
+```{R}
+#Correlation with education
+
+cor.test(cases$AQ_full, cases$education)
+ggplot(cases, aes(education, AQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(cases$EQ_full, cases$education)
+ggplot(cases, aes(education, EQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(cases$SQ_full, cases$education)
+ggplot(cases, aes(education, SQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+
+cor.test(cases$SPQ_full, cases$education)
+ggplot(cases, aes(education, SPQ_full)) + geom_smooth(method = "lm") + theme_minimal()
+```
+
+
+\newpage
+
+## Geographical differences in the four measures, controls
+
+```{R}
+m = aov(data=controls, AQ_full~as.character(countryregion))
+anova(m)
+
+m = aov(data=controls, EQ_full~as.character(countryregion))
+anova(m)
+
+m = aov(data=controls, SQ_full~as.character(countryregion))
+anova(m)
+
+m = aov(data=controls, SPQ_full~as.character(countryregion))
+anova(m)
+
+
+controls2 = controls[,c ("sex", "countryregion", "AQ_full", "EQ_full", "SQ_full", "SPQ_full" )]
+
+controls2_melt =  melt(controls2, id.vars=c("sex", "countryregion"))
+
+head(controls2_melt)
+
+alpha = ddply(controls2_melt, c("sex", "countryregion", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+alpha
+
+```
+
+\newpage
+
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+
+
+
+
+
+
+# Section 3: STEM differences
+
+\newpage
+
+## STEM differences
+
+```{R}
+#STEM differences
+t.test(controls$AQ_full ~ controls$STEM)
+ggplot(controls, aes(x=AQ_full, colour=as.character(STEM))) +   geom_density() + theme_minimal()
+
+t.test(controls$EQ_full ~ controls$STEM)
+ggplot(controls, aes(x=EQ_full, colour=as.character(STEM))) +   geom_density() + theme_minimal()
+
+t.test(controls$SQ_full ~ controls$STEM)
+ggplot(controls, aes(x=SQ_full, colour=as.character(STEM))) +   geom_density() + theme_minimal()
+
+t.test(controls$SPQ_full ~ controls$STEM)
+ggplot(controls, aes(x=SPQ_full, colour=as.character(STEM))) +   geom_density() + theme_minimal()
+
+
+controls2 = controls[,c ("sex", "STEM", "AQ_full", "EQ_full", "SQ_full", "SPQ_full" )]
+controls2 =  controls2[!is.na(controls2$AQ_full),]
+
+controls2_melt =  melt(controls2, id.vars=c("sex", "STEM"))
+
+head(controls2_melt)
+
+alpha = ddply(controls2_melt, c("sex", "STEM", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+alpha
+```
+
+\newpage
+
+## STEM regression analyses
+**AQ analysis**
+
+```{R}
+summary(lm(AQ_full ~ STEM + as.character(countryregion) + as.character(handedness) + as.character(sex) + education + age, data = controls))
+
+
+summary(lm(EQ_full ~ STEM + as.character(countryregion) + as.character(handedness) + as.character(sex) + education + age, data = data2))
+
+
+summary(lm(SQ_full ~ STEM + as.character(countryregion) + as.character(handedness) + as.character(sex) + education + age, data = controls))
+
+
+
+summary(lm(SPQ_full ~ STEM + as.character(countryregion) + as.character(handedness) + as.character(sex) + education + age, data = controls))
+
+```
+
+
+\newpage
+
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+
+
+# Section 4: Predicting AQ from other variables in controls
+
+
+
+\newpage
+
+```{R}
+
+summary(lm(AQ_full ~ as.character(handedness) + as.character(sex) + as.character(countryregion) + education + age + as.character(STEM), data = controls ))
+
+summary(lm(AQ_full ~ as.character(handedness) + as.character(sex) + as.character(countryregion) + education + age + as.character(STEM) + wheelwrightD, data = controls ))
+
+summary(lm(AQ_full ~ as.character(handedness) + as.character(sex) + as.character(countryregion) + education + age + as.character(STEM) + wheelwrightD + SPQ_full, data = controls ))
+
+summary(lm(AQ_full ~ as.character(handedness) + as.character(sex) + as.character(countryregion) + education + age + as.character(STEM) + SQ_full + EQ_full + SPQ_full, data = controls ))
+
+```
+
+
+
+\newpage
+
+
+################################################################################################
+################################################################################################
+################################################################################################
+
+
+
+# Section 4: Case-control analyses
+
+
+
+\newpage
+
+
+## Case-control STEM
+```{R}
+cases_STEM = nrow(subset(cases, STEM == "1"))
+
+cases_nonSTEM = nrow(subset(cases, STEM == "0"))
+
+controls_STEM = nrow(subset(controls, STEM == "1"))
+
+controls_nonSTEM = nrow(subset(controls, STEM == "0"))
+
+STEMdiff <- matrix(c(cases_STEM,controls_STEM,cases_nonSTEM,controls_nonSTEM), ncol=2)
+colnames(STEMdiff) <- c('STEM', 'nonSTEM')
+row.names(STEMdiff) <- c('Cases', 'Controls')
+
+STEMdiff
+
+chisq.test(STEMdiff) 
+
+summary(glm(STEM ~ as.character(autism) + as.character(sex) + education + age, data = data2))
+
+```
+
+
+
+\newpage
+
+
+
+## Case-control AQ, EQ, SQ, and SPQ
+```{R}
+
+males = subset(data2, sex == "1")
+females = subset(data2, sex == "2")
+t.test(males$AQ_full ~ males$autism)
+ggplot(males, aes(x=AQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+t.test(males$EQ_full ~ males$autism)
+ggplot(males, aes(x=EQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+t.test(males$SQ_full ~ males$autism)
+ggplot(males, aes(x=SQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+t.test(males$SPQ_full ~ males$autism)
+ggplot(males, aes(x=SPQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+
+t.test(females$AQ_full ~ females$autism)
+ggplot(females, aes(x=AQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+t.test(females$EQ_full ~ females$autism)
+ggplot(females, aes(x=EQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+t.test(females$SQ_full ~ females$autism)
+ggplot(females, aes(x=SQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+t.test(females$SPQ_full ~ females$autism)
+ggplot(females, aes(x=SPQ_full, colour=as.character(autism))) +   geom_density() + theme_minimal()
+
+data2melt = data2[,c ("sex", "autism", "AQ_full", "EQ_full", "SQ_full", "SPQ_full" )]
+data2melt =  data2melt[!is.na(data2melt$AQ_full),]
+data2melt =  melt(data2melt, id.vars=c("sex", "autism"))
+
+
+head(data2melt)
+
+ddply(data2melt, c("sex", "autism", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+
+```
+
+
+
+\newpage
+
+## Case-control regression analyses**
+
+```{R}
+
+summary(glm(as.numeric(as.character(autism)) ~ as.character(sex) + education + 
+    AQ_full + AQ_full:education + AQ_full:as.character(sex) + as.character(sex):education + 
+    as.character(countryregion) + as.character(handedness) + 
+    age + age:education + AQ_full:age + age:as.character(sex) + STEM, data = data2))
+
+
+
+
+```
+
+
+\newpage
+
+## Brain type analysis
+### Females control percentage
+
+```{R}
+
+#Sex distribution
+
+controls = subset(data2, autism == "0")
+fem_controls = subset(controls, sex == "2")
+
+cat("total number of females is", nrow(fem_controls))
+
+extremeE = subset(fem_controls, braintype == "1")
+E = subset(fem_controls, braintype == "2")
+B = subset(fem_controls, braintype == "3")
+S = subset(fem_controls, braintype == "4")
+extremeS = subset(fem_controls, braintype == "5")
+
+cat("percentage of females with extreme E is", (nrow(extremeE)/nrow(fem_controls))*100)
+
+cat("percentage of females with E is", (nrow(E)/nrow(fem_controls))*100 )
+
+cat("percentage of females with B is", (nrow(B)/nrow(fem_controls))*100)
+
+cat("percentage of females with S is", (nrow(S)/nrow(fem_controls))*100)
+
+cat("percentage of females with Extreme S is", (nrow(extremeS)/nrow(fem_controls))*100)
+
+```
+
+
+\newpage
+
+## Brain type analysis
+### Males percentage
+
+```{R}
+
+#Sex distribution
+
+controls = subset(data2, autism == "0")
+male_controls = subset(controls, sex == "1")
+
+cat("total number of males is", nrow(male_controls))
+
+extremeE = subset(male_controls, braintype == "1")
+E = subset(male_controls, braintype == "2")
+B = subset(male_controls, braintype == "3")
+S = subset(male_controls, braintype == "4")
+extremeS = subset(male_controls, braintype == "5")
+
+cat("percentage of males with extreme E is", (nrow(extremeE)/nrow(male_controls))*100)
+
+cat("percentage of males with E is", (nrow(E)/nrow(male_controls))*100 )
+
+cat("percentage of males with B is", (nrow(B)/nrow(male_controls))*100)
+
+cat("percentage of males with S is", (nrow(S)/nrow(male_controls))*100)
+
+cat("percentage of males with Extreme S is", (nrow(extremeS)/nrow(male_controls))*100)
+
+```
+
+
+\newpage
+
+## Brain type analysis
+### Females cases percentage
+
+```{R}
+
+#Sex distribution
+
+cases = subset(data2, autism == "1")
+fem_cases = subset(cases, sex == "2")
+
+cat("total number of females is", nrow(fem_cases))
+
+extremeE = subset(fem_cases, braintype == "1")
+E = subset(fem_cases, braintype == "2")
+B = subset(fem_cases, braintype == "3")
+S = subset(fem_cases, braintype == "4")
+extremeS = subset(fem_cases, braintype == "5")
+
+cat("percentage of females with extreme E is", (nrow(extremeE)/nrow(fem_cases))*100)
+
+cat("percentage of females with E is", (nrow(E)/nrow(fem_cases))*100 )
+
+cat("percentage of females with B is", (nrow(B)/nrow(fem_cases))*100)
+
+cat("percentage of females with S is", (nrow(S)/nrow(fem_cases))*100)
+
+cat("percentage of females with Extreme S is", (nrow(extremeS)/nrow(fem_cases))*100)
+
+```
+
+\newpage
+
+## Brain type analysis
+### Males cases percentage
+
+```{R}
+
+#Sex distribution
+
+cases = subset(data2, autism == "1")
+male_cases = subset(cases, sex == "1")
+
+cat("total number of males is", nrow(male_cases))
+
+extremeE = subset(male_cases, braintype == "1")
+E = subset(male_cases, braintype == "2")
+B = subset(male_cases, braintype == "3")
+S = subset(male_cases, braintype == "4")
+extremeS = subset(male_cases, braintype == "5")
+
+cat("percentage of females with extreme E is", (nrow(extremeE)/nrow(male_cases))*100)
+
+cat("percentage of females with E is", (nrow(E)/nrow(male_cases))*100 )
+
+cat("percentage of females with B is", (nrow(B)/nrow(male_cases))*100)
+
+cat("percentage of females with S is", (nrow(S)/nrow(male_cases))*100)
+
+cat("percentage of females with Extreme S is", (nrow(extremeS)/nrow(male_cases))*100)
+
+```
+
+\newpage
+
+
+##Anova with brain types
+```{R}
+
+m = aov(data=controls, AQ_full~as.character(braintype))
+anova(m)
+TukeyHSD((m), "as.character(braintype)")
+
+
+m = aov(data=controls, SPQ_full~as.character(braintype))
+anova(m)
+TukeyHSD((m), "as.character(braintype)")
+
+controls2 = controls[,c ("braintype", "AQ_full", "SPQ_full" )]
+controls2 =  controls2[!is.na(controls2$AQ_full),]
+controls2_melt =  melt(controls2, id.vars=c("braintype"))
+
+
+ddply(controls2_melt, c("braintype", "variable"), summarise,
+      mean = mean(value), sd = sd(value),
+      sem = sd(value)/sqrt(length(value)))
+
+
+```
+
+
+
+
+## Sex differences
+```{R}
+sexdiff = matrix(c(18230, 241604, 18515, 393930), ncol = 2, byrow = TRUE)
+
+colnames(sexdiff) = c("Cases", "Controls")
+
+rownames(sexdiff) = c("Males", "Females")
+
+sexdiff
+
+chisq.test(sexdiff)
+
+```
+
+\newpage
+
+## Additional analyses
+### Other sex
+
+```{R}
+data3 = subset(data, repeat. == 0) #695166
+
+data3$autism = ifelse(data3$diagnosis_0 == "2" | data3$diagnosis_1 == "2"| data3$diagnosis_3 == "2" | data3$diagnosis_4 == "2" | data3$diagnosis_5 == "2" | data3$diagnosis_6 == "2" | data3$diagnosis_7 == "2" | data3$diagnosis_8 == "2" | data3$autism_diagnosis_0 > 0 | data3$autism_diagnosis_1 > 0 | data3$autism_diagnosis_2 > 0, 1, 0)
+
+data3$autism[is.na(data3$autism)] <- 0
+
+cases_2 = subset(data3, autism == "1")
+controls_2 = subset(data3, autism == "0")
+
+controls1 = subset(controls_2, sex == "1")
+controls2 = subset(controls_2, sex == "2")
+controls3 = subset(controls_2, sex == "3")
+
+a = nrow(controls1)
+
+b = nrow(controls2)
+
+c = nrow(controls3)
+
+cases1 = subset(cases_2, sex == "1")
+cases2 = subset(cases_2, sex == "2")
+cases3 = subset(cases_2, sex == "3")
+
+d = nrow(cases1)
+
+e = nrow(cases2)
+
+f = nrow(cases3)
+
+sex_3_way = matrix(c(a, d, b, e, c, f ), ncol = 2, byrow = TRUE)
+
+colnames(sex_3_way) = c("Controls", "Cases")
+
+rownames(sex_3_way) = c("Males", "Females", "Other")
+
+sex_3_way
+
+chisq.test(sex_3_way)
+
+sex_2_way = matrix(c(d+e, a+b, f, c ), ncol = 2, byrow = TRUE)
+
+colnames(sex_2_way) = c("Cases", "Controls")
+
+rownames(sex_2_way) = c("Binary", "Non-binary")
+
+sex_2_way
+
+chisq.test(sex_2_way)
+
+```
+
+
+\newpage
+
+## ANOVA with handedness in controls
+
+```{R}
+#ANOVA with handedness
+###AQ###
+
+cat("handedness AQ results")
+m = aov(data=controls, AQ_full~as.character(handedness))
+anova(m)
+TukeyHSD((m), "as.character(handedness)")
+
+tky = as.data.frame(TukeyHSD(m)$"as.character(handedness)")
+tky$pair = rownames(tky)
+tky$`p adj` = ifelse(tky$`p adj` == 0, 2.2e-16, tky$`p adj`)
+
+
+# Plot pairwise TukeyHSD comparisons and color by significance level
+ggplot(tky, aes(colour=cut(`p adj`, c(0, 0.01, 0.05, 1), 
+                           label=c("p<0.01","p<0.05","Non-Sig")))) +
+  geom_hline(yintercept=0, lty="11", colour="grey30") +
+  geom_errorbar(aes(pair, ymin=lwr, ymax=upr), width=0.2) +
+  geom_point(aes(pair, diff)) +
+  labs(colour="") +labs(x = "Difference", y = "Comparisons") + theme(legend.position="none") + theme_minimal()
+
+
+###EQ###
+
+cat("handedness EQ results")
+m = aov(data=controls, EQ_full~as.character(handedness))
+anova(m)
+TukeyHSD((m), "as.character(handedness)")
+
+tky = as.data.frame(TukeyHSD(m)$"as.character(handedness)")
+tky$pair = rownames(tky)
+tky$`p adj` = ifelse(tky$`p adj` == 0, 2.2e-16, tky$`p adj`)
+
+
+# Plot pairwise TukeyHSD comparisons and color by significance level
+ggplot(tky, aes(colour=cut(`p adj`, c(0, 0.01, 0.05, 1), 
+                           label=c("p<0.01","p<0.05","Non-Sig")))) +
+  geom_hline(yintercept=0, lty="11", colour="grey30") +
+  geom_errorbar(aes(pair, ymin=lwr, ymax=upr), width=0.2) +
+  geom_point(aes(pair, diff)) +
+  labs(colour="") +labs(x = "Difference", y = "Comparisons") + theme(legend.position="none") + theme_minimal()
+
+
+###SQ###
+cat("handedness SQ results")
+m = aov(data=controls, SQ_full~as.character(handedness))
+anova(m)
+TukeyHSD((m), "as.character(handedness)")
+
+tky = as.data.frame(TukeyHSD(m)$"as.character(handedness)")
+tky$pair = rownames(tky)
+tky$`p adj` = ifelse(tky$`p adj` == 0, 2.2e-16, tky$`p adj`)
+
+
+# Plot pairwise TukeyHSD comparisons and color by significance level
+ggplot(tky, aes(colour=cut(`p adj`, c(0, 0.01, 0.05, 1), 
+                           label=c("p<0.01","p<0.05","Non-Sig")))) +
+  geom_hline(yintercept=0, lty="11", colour="grey30") +
+  geom_errorbar(aes(pair, ymin=lwr, ymax=upr), width=0.2) +
+  geom_point(aes(pair, diff)) +
+  labs(colour="") +labs(x = "Difference", y = "Comparisons") + theme(legend.position="none") + theme_minimal()
+
+###SPQ##
+cat("handedness SPQ results")
+m = aov(data=controls, SPQ_full~as.character(handedness))
+anova(m)
+TukeyHSD((m), "as.character(handedness)")
+
+tky = as.data.frame(TukeyHSD(m)$"as.character(handedness)")
+tky$pair = rownames(tky)
+tky$`p adj` = ifelse(tky$`p adj` == 0, 2.2e-16, tky$`p adj`)
+
+
+# Plot pairwise TukeyHSD comparisons and color by significance level
+ggplot(tky, aes(colour=cut(`p adj`, c(0, 0.01, 0.05, 1), 
+                           label=c("p<0.01","p<0.05","Non-Sig")))) +
+  geom_hline(yintercept=0, lty="11", colour="grey30") +
+  geom_errorbar(aes(pair, ymin=lwr, ymax=upr), width=0.2) +
+  geom_point(aes(pair, diff)) +
+  labs(colour="") +labs(x = "Difference", y = "Comparisons") + theme(legend.position="none") + theme_minimal()
+
+```
+
+
+\newpage
+
+# Generating plots
+
+```{R}
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+data2$category = ifelse(data2$sex == 1 & data2$autism == 0, "control_males", "NA")
+data2$category = ifelse(data2$sex == 2 & data2$autism == 0, "control_females", data2$category)
+data2$category = ifelse(data2$sex == 2 & data2$autism == 1, "autism_females", data2$category)
+data2$category = ifelse(data2$sex == 1 & data2$autism == 1, "autism_males", data2$category)
+
+#CDFfigure
+cdf_plot = ggplot(data2, aes(wheelwrightD, colour = category)) + stat_ecdf() +xlab("Dscore") + ylab("Cumulative frequency") + theme_classic()
+
+#Case-control by sex Figure
+
+a = ggplot(data2, aes(x=AQ_full, colour=as.character(category))) +   geom_density(adjust = 4) + theme_classic() + xlab("AQ-10 scores") + scale_x_continuous(breaks=seq(0,11,2))
+b = ggplot(data2, aes(x=EQ_full, colour=as.character(category))) +   geom_density(adjust = 2) + theme_classic() + xlab("EQ-10 scores") + scale_x_continuous(breaks=seq(0,41,2))
+c = ggplot(data2, aes(x=SQ_full, colour=as.character(category))) +   geom_density(adjust = 2) + theme_classic() + xlab("SQ-10 scores") + scale_x_continuous(breaks=seq(0,41,2))
+d = ggplot(data2, aes(x=SPQ_full, colour=as.character(category))) +   geom_density(adjust = 2) + theme_classic() + xlab("SPQ-10 scores") + scale_x_continuous(breaks=seq(0,31,5))
+case_control_plot = multiplot(a, b, c, d, cols=2)
+
+
+#STEM figure
+controls2 = controls[!is.na(controls$STEM),]
+controls2$category = ifelse(controls2$sex == 1 & controls2$STEM == 0, "nonSTEM_males", "NA")
+controls2$category = ifelse(controls2$sex == 2 & controls2$STEM == 0, "nonSTEM_females", controls2$category)
+controls2$category = ifelse(controls2$sex == 1 & controls2$STEM == 1, "STEM_males", controls2$category)
+controls2$category = ifelse(controls2$sex == 2 & controls2$STEM == 1, "STEM_females", controls2$category)
+
+a = ggplot(controls2, aes(x=AQ_full, colour=as.character(category))) +   geom_density(adjust = 4) + theme_classic() + xlab("AQ-10 scores") + scale_x_continuous(breaks=seq(0,11,2))
+b = ggplot(controls2, aes(x=EQ_full, colour=as.character(category))) +   geom_density(adjust = 2) + theme_classic() + xlab("EQ-10 scores") + scale_x_continuous(breaks=seq(0,41,2))
+c = ggplot(controls2, aes(x=SQ_full, colour=as.character(category))) +   geom_density(adjust = 2) + theme_classic() + xlab("SQ-10 scores") + scale_x_continuous(breaks=seq(0,41,2))
+d = ggplot(controls2, aes(x=SPQ_full, colour=as.character(category))) +   geom_density(adjust = 2) + theme_classic() + xlab("SPQ-10 scores") + scale_x_continuous(breaks=seq(0,31,5))
+stem_diff_plot = multiplot(a, b, c, d, cols=2)
+
+
+```
+
+
+
+
+
+
